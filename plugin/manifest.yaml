@@ -1,0 +1,15 @@
+plugin:
+  name: picolms
+  description: picolms
+  version: 0.0.1
+  service_order:
+    - picolms
+  service:
+    - name: picolms
+      description: picolms
+      default_config:
+        data_dir: picolms/data
+        private_api_port: 30000
+        public_api_port: 30001
+      migration:
+        - 1725101707904-tasks.sql
