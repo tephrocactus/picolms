@@ -7,9 +7,9 @@ edition = "2021"
 lto = true
 
 [dependencies]
-mimalloc = "0.*"
 tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0", features = ["rt"] }
+poem = { version = "3", features = ["anyhow", "rustls"] }
 reqwest = { version = "0", features = ["stream", "rustls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -22,8 +22,13 @@ tracing = "0"
 tracing-subscriber = "0"
 ordered-float = { version = "4", features = ["serde"] }
 time = { version = "0", features = ["serde-human-readable", "local-offset"] }
-clap = { version = "4", features = ["derive"] }
-picoplugin = { path = "../picodata/picoplugin" }
+unicase = "2"
+regex = "1"
+like = "0"
+ipnet = { version = "2", features = ["serde"] }
+arrow = "52"
+parquet = "52"
+picoplugin = { git = "https://git.picodata.io/picodata/picodata/picodata", branch = "master" }
 
 [dev-dependencies]
 criterion = { version = "0" }
