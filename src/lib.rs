@@ -2,6 +2,7 @@ mod api;
 mod engine;
 pub(crate) mod picodata;
 
+use crate::api::tls_config;
 use crate::engine::Engine;
 use crate::picodata::rpc::ProxyClient;
 use crate::picodata::service::ServiceConfig;
@@ -21,12 +22,8 @@ pub async fn entrypoint(
 ) -> Result<()> {
     let engine = Engine::new();
     let api_server = api::start_server(
-        api::Config {
-            addr: SocketAddr::from_str(&format!("0.0.0.0:{}", cfg.api_port))?,
-            ca: cfg.api_ca_crt,
-            crt: cfg.api_crt,
-            key: cfg.api_key,
-        },
+        SocketAddr::from_str(&format!("0.0.0.0:{}", cfg.api_port))?,
+        tls_config(&cfg.api_ca_crt, &cfg.api_crt, &cfg.api_key)?,
         api::State::new(engine, rpc_client),
         ct,
     );

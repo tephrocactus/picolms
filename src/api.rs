@@ -1,3 +1,6 @@
+mod health;
+mod state;
+
 use anyhow::Context;
 use anyhow::Result;
 use poem::get;
@@ -8,36 +11,30 @@ use poem::listener::TcpListener;
 use poem::EndpointExt;
 use poem::Route;
 use poem::Server;
+pub use state::State;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use tokio_util::sync::CancellationToken;
 
-mod health;
-mod state;
-
-pub use state::State;
-
-pub struct Config {
-    pub addr: SocketAddr,
-    pub ca: PathBuf,
-    pub crt: PathBuf,
-    pub key: PathBuf,
-}
-
-pub async fn start_server(cfg: Config, state: State, ct: CancellationToken) -> Result<()> {
-    let listener = TcpListener::bind(cfg.addr).rustls({
-        let ca = std::fs::read(&cfg.ca).with_context(|| format!("read {}", cfg.ca.display()))?;
-        let crt = std::fs::read(&cfg.crt).with_context(|| format!("read {}", cfg.crt.display()))?;
-        let key = std::fs::read(&cfg.key).with_context(|| format!("read {}", cfg.key.display()))?;
-        RustlsConfig::new()
-            .client_auth_required(ca)
-            .fallback(RustlsCertificate::new().key(key).cert(crt))
-    });
-
+pub async fn start_server(
+    addr: SocketAddr,
+    tls: RustlsConfig,
+    state: State,
+    ct: CancellationToken,
+) -> Result<()> {
+    let listener = TcpListener::bind(addr).rustls(tls);
     let router = Route::new().at("/", get(health::handler)).data(state);
-
     Server::new(listener)
         .run_with_graceful_shutdown(router, ct.cancelled_owned(), None)
         .await
         .context("run")
+}
+
+pub fn tls_config(ca: &PathBuf, crt: &PathBuf, key: &PathBuf) -> Result<RustlsConfig> {
+    let ca = std::fs::read(ca).with_context(|| ca.display().to_string())?;
+    let crt = std::fs::read(crt).with_context(|| crt.display().to_string())?;
+    let key = std::fs::read(key).with_context(|| key.display().to_string())?;
+    Ok(RustlsConfig::new()
+        .client_auth_required(ca)
+        .fallback(RustlsCertificate::new().key(key).cert(crt)))
 }
