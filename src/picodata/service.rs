@@ -19,7 +19,6 @@ struct Service {
     sw: ServiceWarnings,
     ct: CancellationToken,
     done_rx: Option<oneshot::EndpointReceiver<()>>,
-    started: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -52,7 +51,7 @@ impl PicoService for Service {
 
     fn on_start(&mut self, ctx: &PicoContext, cfg: Self::Config) -> CallbackResult<()> {
         // https://git.picodata.io/picodata/picodata/picodata/-/issues/727
-        if self.started {
+        if self.done_rx.is_some() {
             return Ok(());
         }
 
@@ -63,15 +62,12 @@ impl PicoService for Service {
             .map_err(|e| Error::Entrypoint(e))?;
 
         self.done_rx = Some(done_rx);
-        self.started = true;
-
         Ok(())
     }
 
     fn on_stop(&mut self, _: &PicoContext) -> CallbackResult<()> {
-        self.ct.cancel();
-
         if let Some(done_rx) = self.done_rx.take() {
+            self.ct.cancel();
             done_rx.receive().ok();
         }
 
