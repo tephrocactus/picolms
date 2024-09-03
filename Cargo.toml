@@ -32,3 +32,6 @@ picoplugin = { git = "https://git.picodata.io/picodata/picodata/picodata", branc
 
 [dev-dependencies]
 criterion = { version = "0" }
+
+[lib]
+crate-type = ["dylib"]

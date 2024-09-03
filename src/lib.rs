@@ -6,19 +6,19 @@ use crate::api::tls_config;
 use crate::engine::Engine;
 use crate::picodata::rpc::ProxyClient;
 use crate::picodata::service::ServiceConfig;
-use crate::picodata::service::ServiceErrors;
+use crate::picodata::service::ServiceWarnings;
 use anyhow::Result;
+use picoplugin::interplay::channel::oneshot;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use tokio_util::sync::CancellationToken;
-use tokio_util::task::TaskTracker;
 
-pub async fn entrypoint(
+pub fn entrypoint(
     cfg: ServiceConfig,
     rpc_client: ProxyClient,
-    tt: TaskTracker,
+    done_tx: oneshot::Sender<()>,
     ct: CancellationToken,
-    se: ServiceErrors,
+    sw: ServiceWarnings,
 ) -> Result<()> {
     let engine = Engine::new();
     let api_server = api::start_server(
@@ -28,10 +28,17 @@ pub async fn entrypoint(
         ct,
     );
 
-    tt.spawn(async move {
-        if let Err(e) = api_server.await {
-            se.set_public_api_error(Some(e.to_string()));
+    std::thread::spawn(move || {
+        if let Err(e) = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(api_server)
+        {
+            sw.set_public_api_error(Some(e.to_string()));
         }
+
+        done_tx.send(());
     });
 
     Ok(())

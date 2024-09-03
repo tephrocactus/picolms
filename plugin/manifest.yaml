@@ -1,15 +1,12 @@
-plugin:
-  name: picolms
-  description: picolms
-  version: 0.0.1
-  service_order:
-    - picolms
-  service:
-    - name: picolms
-      description: picolms
-      default_config:
-        api_port: 30000
-        api_ca_crt: api-ca.crt
-        api_crt: api-server.crt
-        api_key: api-server.key
-        data_dir: picolms/data
+name: picolms
+description: picolms
+version: 0.1.0
+services:
+  - name: picolms
+    description: picolms
+    default_configuration:
+      api_port: 30000
+      api_ca_crt: api-ca.crt
+      api_crt: api-server.crt
+      api_key: api-server.key
+      data_dir: picolms/data

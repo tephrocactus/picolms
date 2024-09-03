@@ -1,31 +1,29 @@
 use crate::entrypoint;
 use crate::picodata::rpc;
-use anyhow::Context;
-use picoplugin::interplay::tros::transport::cbus::CBusTransport;
-use picoplugin::interplay::tros::TokioExecutor;
+use picoplugin::interplay::channel::oneshot;
 use picoplugin::plugin::interface::Service as PicoService;
 use picoplugin::plugin::prelude::service_registrar;
 use picoplugin::plugin::prelude::CallbackResult;
 use picoplugin::plugin::prelude::PicoContext;
 use picoplugin::plugin::prelude::ServiceRegistry;
 use serde::Deserialize;
+use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
+use thiserror::Error;
 use tokio_util::sync::CancellationToken;
-use tokio_util::task::TaskTracker;
 
 #[derive(Default)]
 struct Service {
-    rt: TokioExecutor<CBusTransport<'static>>,
-    tt: TaskTracker,
-    se: ServiceErrors,
+    sw: ServiceWarnings,
     ct: CancellationToken,
+    done_rx: Option<oneshot::EndpointReceiver<()>>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct ServiceConfig {
-    pub api_port: u16,
+    pub api_port: NonZeroUsize,
     pub api_ca_crt: PathBuf,
     pub api_crt: PathBuf,
     pub api_key: PathBuf,
@@ -33,43 +31,57 @@ pub struct ServiceConfig {
 }
 
 #[derive(Clone, Default)]
-pub struct ServiceErrors(Arc<Mutex<ServiceErrorsInner>>);
+pub struct ServiceWarnings(Arc<Mutex<ServiceWarningsInner>>);
 
 #[derive(Default)]
-struct ServiceErrorsInner {
+struct ServiceWarningsInner {
     private_api_server: Option<String>,
     public_api_server: Option<String>,
+}
+
+#[derive(Debug, Error)]
+enum Error {
+    #[error("rpc: {0}")]
+    Rpc(#[from] rpc::Error),
+    #[error("entrypoint: {0:?}")]
+    Entrypoint(#[from] anyhow::Error),
 }
 
 impl PicoService for Service {
     type Config = ServiceConfig;
 
-    fn on_start(&mut self, _: &PicoContext, config: Self::Config) -> CallbackResult<()> {
-        Ok(self
-            .rt
-            .exec(entrypoint(
-                config,
-                rpc::spawn_proxy().context("spawn rpc proxy")?,
-                self.tt.clone(),
-                self.ct.clone(),
-                self.se.clone(),
-            ))
-            .context("exec")?
-            .context("entrypoint")?)
+    fn on_start(&mut self, ctx: &PicoContext, cfg: Self::Config) -> CallbackResult<()> {
+        let (done_tx, done_rx) = oneshot::channel::<()>();
+
+        entrypoint(
+            cfg,
+            rpc::spawn_proxy_server(ctx).map_err(|e| Error::Rpc(e))?,
+            done_tx,
+            self.ct.clone(),
+            self.sw.clone(),
+        )
+        .map_err(|e| Error::Entrypoint(e))?;
+
+        self.done_rx = Some(done_rx);
+        Ok(())
     }
 
     fn on_stop(&mut self, _: &PicoContext) -> CallbackResult<()> {
         self.ct.cancel();
-        self.tt.close();
-        Ok(self.rt.exec(self.tt.wait()).context("exec")?)
+
+        if let Some(done_rx) = self.done_rx.take() {
+            done_rx.receive().ok();
+        }
+
+        Ok(())
     }
 
     fn on_health_check(&self, _: &PicoContext) -> CallbackResult<()> {
-        self.se.check()
+        self.sw.check()
     }
 }
 
-impl ServiceErrors {
+impl ServiceWarnings {
     pub fn set_private_api_error(&self, e: Option<String>) {
         self.0.lock().unwrap().private_api_server = e;
     }

@@ -1,4 +1,5 @@
 mod health;
+mod insert;
 mod state;
 
 use anyhow::Context;
@@ -8,6 +9,7 @@ use poem::listener::Listener;
 use poem::listener::RustlsCertificate;
 use poem::listener::RustlsConfig;
 use poem::listener::TcpListener;
+use poem::post;
 use poem::EndpointExt;
 use poem::Route;
 use poem::Server;
@@ -22,9 +24,12 @@ pub async fn start_server(
     state: State,
     ct: CancellationToken,
 ) -> Result<()> {
-    let listener = TcpListener::bind(addr).rustls(tls);
-    let router = Route::new().at("/", get(health::handler)).data(state);
-    Server::new(listener)
+    let router = Route::new()
+        .at("/", get(health::handler))
+        .at("/insert", post(insert::handler))
+        .data(state);
+
+    Server::new(TcpListener::bind(addr).rustls(tls))
         .run_with_graceful_shutdown(router, ct.cancelled_owned(), None)
         .await
         .context("run")
