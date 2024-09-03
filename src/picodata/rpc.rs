@@ -9,6 +9,8 @@ use thiserror::Error;
 use tokio::task::spawn_blocking;
 use tokio::task::JoinError;
 
+const PROXY_CHANNEL_CAPACITY: usize = 100;
+
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("spawn proxy: {0}")]
@@ -66,7 +68,7 @@ impl ProxyClient {
 }
 
 pub fn spawn_proxy() -> Result<ProxyClient, Error> {
-    let (tx, rx) = channel::channel(100.try_into().unwrap());
+    let (tx, rx) = channel::channel(PROXY_CHANNEL_CAPACITY.try_into().unwrap());
 
     fiber::Builder::new()
         .func(move || proxy(rx))
