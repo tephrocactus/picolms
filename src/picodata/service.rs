@@ -35,7 +35,6 @@ pub struct ServiceWarnings(Arc<Mutex<ServiceWarningsInner>>);
 
 #[derive(Default)]
 struct ServiceWarningsInner {
-    private_api_server: Option<String>,
     public_api_server: Option<String>,
 }
 
@@ -77,10 +76,6 @@ impl PicoService for Service {
 }
 
 impl ServiceWarnings {
-    pub fn set_private_api_error(&self, e: Option<String>) {
-        self.0.lock().unwrap().private_api_server = e;
-    }
-
     pub fn set_public_api_error(&self, e: Option<String>) {
         self.0.lock().unwrap().public_api_server = e;
     }
@@ -88,10 +83,6 @@ impl ServiceWarnings {
     fn check(&self) -> CallbackResult<()> {
         let mut errors = Vec::new();
         let guard = self.0.lock().unwrap();
-
-        if let Some(e) = &guard.private_api_server {
-            errors.push(format!("private api server: {}", e));
-        }
 
         if let Some(e) = &guard.public_api_server {
             errors.push(format!("public api server: {}", e));
