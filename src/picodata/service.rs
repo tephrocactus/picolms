@@ -19,6 +19,7 @@ struct Service {
     sw: ServiceWarnings,
     ct: CancellationToken,
     done_rx: Option<oneshot::EndpointReceiver<()>>,
+    started: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -50,6 +51,11 @@ impl PicoService for Service {
     type Config = ServiceConfig;
 
     fn on_start(&mut self, ctx: &PicoContext, cfg: Self::Config) -> CallbackResult<()> {
+        // https://git.picodata.io/picodata/picodata/picodata/-/issues/727
+        if self.started {
+            return Ok(());
+        }
+
         let (done_tx, done_rx) = oneshot::channel::<()>();
         let rpc_client = rpc::spawn_proxy_server(ctx).map_err(|e| Error::Rpc(e))?;
 
@@ -57,6 +63,8 @@ impl PicoService for Service {
             .map_err(|e| Error::Entrypoint(e))?;
 
         self.done_rx = Some(done_rx);
+        self.started = true;
+
         Ok(())
     }
 
