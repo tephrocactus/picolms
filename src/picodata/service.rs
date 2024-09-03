@@ -1,6 +1,6 @@
 use crate::entrypoint;
+use crate::picodata::rpc;
 use anyhow::Context;
-use picoplugin::internal::instance_info;
 use picoplugin::interplay::tros::transport::cbus::CBusTransport;
 use picoplugin::interplay::tros::TokioExecutor;
 use picoplugin::plugin::interface::Service as PicoService;
@@ -9,7 +9,6 @@ use picoplugin::plugin::prelude::CallbackResult;
 use picoplugin::plugin::prelude::PicoContext;
 use picoplugin::plugin::prelude::ServiceRegistry;
 use serde::Deserialize;
-use std::num::NonZeroU16;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -20,28 +19,24 @@ use tokio_util::task::TaskTracker;
 struct Service {
     rt: TokioExecutor<CBusTransport<'static>>,
     tt: TaskTracker,
+    se: ServiceErrors,
     ct: CancellationToken,
-    se: SharedServiceErrors,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct ServiceConfig {
+    pub api_port: u16,
+    pub api_ca_crt: PathBuf,
+    pub api_crt: PathBuf,
+    pub api_key: PathBuf,
     pub data_dir: PathBuf,
-    pub private_api_port: NonZeroU16,
-    pub private_api_ca: PathBuf,
-    pub private_api_crt: PathBuf,
-    pub private_api_key: PathBuf,
-    pub public_api_port: NonZeroU16,
-    pub public_api_ca: PathBuf,
-    pub public_api_crt: PathBuf,
-    pub public_api_key: PathBuf,
 }
 
 #[derive(Clone, Default)]
-pub struct SharedServiceErrors(Arc<Mutex<ServiceErrors>>);
+pub struct ServiceErrors(Arc<Mutex<ServiceErrorsInner>>);
 
 #[derive(Default)]
-struct ServiceErrors {
+struct ServiceErrorsInner {
     private_api_server: Option<String>,
     public_api_server: Option<String>,
 }
@@ -54,7 +49,7 @@ impl PicoService for Service {
             .rt
             .exec(entrypoint(
                 config,
-                instance_info().unwrap(),
+                rpc::spawn_proxy().context("spawn rpc proxy")?,
                 self.tt.clone(),
                 self.ct.clone(),
                 self.se.clone(),
@@ -74,7 +69,7 @@ impl PicoService for Service {
     }
 }
 
-impl SharedServiceErrors {
+impl ServiceErrors {
     pub fn set_private_api_error(&self, e: Option<String>) {
         self.0.lock().unwrap().private_api_server = e;
     }

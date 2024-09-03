@@ -1,64 +1,39 @@
-// mod accumulator;
 mod api;
 mod engine;
-mod schema;
-mod service;
-mod state;
-mod value;
+pub(crate) mod picodata;
 
 use crate::engine::Engine;
-use crate::service::ServiceConfig;
-use crate::service::SharedServiceErrors;
-use crate::state::SharedState;
+use crate::picodata::rpc::ProxyClient;
+use crate::picodata::service::ServiceConfig;
+use crate::picodata::service::ServiceErrors;
 use anyhow::Result;
-use picoplugin::internal::types::InstanceInfo;
 use std::net::SocketAddr;
 use std::str::FromStr;
-use tokio::select;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
-async fn entrypoint(
+pub async fn entrypoint(
     cfg: ServiceConfig,
-    instance: InstanceInfo,
+    rpc_client: ProxyClient,
     tt: TaskTracker,
     ct: CancellationToken,
-    se: SharedServiceErrors,
+    se: ServiceErrors,
 ) -> Result<()> {
     let engine = Engine::new();
-    let state = SharedState::new(engine, se.clone());
-
-    let private_api_server = api::start_server(
+    let api_server = api::start_server(
         api::Config {
-            addr: SocketAddr::from_str(&format!("0.0.0.0:{}", cfg.private_api_port))?,
-            ca: cfg.private_api_ca,
-            crt: cfg.private_api_crt,
-            key: cfg.private_api_key,
+            addr: SocketAddr::from_str(&format!("0.0.0.0:{}", cfg.api_port))?,
+            ca: cfg.api_ca_crt,
+            crt: cfg.api_crt,
+            key: cfg.api_key,
         },
-        api::private::router(state.clone()),
-        ct.clone(),
-    );
-
-    let public_api_server = api::start_server(
-        api::Config {
-            addr: SocketAddr::from_str(&format!("0.0.0.0:{}", cfg.public_api_port))?,
-            ca: cfg.public_api_ca,
-            crt: cfg.public_api_crt,
-            key: cfg.public_api_key,
-        },
-        api::public::router(state),
+        api::State::new(engine, rpc_client),
         ct,
     );
 
     tt.spawn(async move {
-        select! {
-            e = private_api_server => if let Err(e) = e {
-                se.set_private_api_error(Some(e.to_string()));
-            },
-
-            e = public_api_server => if let Err(e) = e {
-                se.set_public_api_error(Some(e.to_string()));
-            }
+        if let Err(e) = api_server.await {
+            se.set_public_api_error(Some(e.to_string()));
         }
     });
 

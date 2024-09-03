@@ -8,8 +8,8 @@ plugin:
     - name: picolms
       description: picolms
       default_config:
+        api_port: 30000
+        api_ca_crt: api-ca.crt
+        api_crt: api-server.crt
+        api_key: api-server.key
         data_dir: picolms/data
-        private_api_port: 30000
-        public_api_port: 30001
-      migration:
-        - 1725101707904-tasks.sql
