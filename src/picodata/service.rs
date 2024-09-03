@@ -52,15 +52,10 @@ impl PicoService for Service {
 
     fn on_start(&mut self, ctx: &PicoContext, cfg: Self::Config) -> CallbackResult<()> {
         let (done_tx, done_rx) = oneshot::channel::<()>();
+        let rpc_client = rpc::spawn_proxy_server(ctx).map_err(|e| Error::Rpc(e))?;
 
-        entrypoint(
-            cfg,
-            rpc::spawn_proxy_server(ctx).map_err(|e| Error::Rpc(e))?,
-            done_tx,
-            self.ct.clone(),
-            self.sw.clone(),
-        )
-        .map_err(|e| Error::Entrypoint(e))?;
+        entrypoint(cfg, rpc_client, done_tx, self.ct.clone(), self.sw.clone())
+            .map_err(|e| Error::Entrypoint(e))?;
 
         self.done_rx = Some(done_rx);
         Ok(())

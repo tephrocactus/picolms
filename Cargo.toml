@@ -29,6 +29,7 @@ ipnet = { version = "2", features = ["serde"] }
 arrow = "52"
 parquet = "52"
 picoplugin = { git = "https://git.picodata.io/picodata/picodata/picodata", branch = "master" }
+# picoplugin = { path = "../picodata/picoplugin" }
 
 [dev-dependencies]
 criterion = { version = "0" }

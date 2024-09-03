@@ -11,8 +11,6 @@ use anyhow::Result;
 use picoplugin::interplay::channel::oneshot;
 use std::net::SocketAddr;
 use std::str::FromStr;
-use std::thread::sleep;
-use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 pub fn entrypoint(
@@ -40,7 +38,6 @@ pub fn entrypoint(
             sw.set_public_api_error(Some(e.to_string()));
         }
 
-        sleep(Duration::from_secs(60));
         done_tx.send(());
     });
 
